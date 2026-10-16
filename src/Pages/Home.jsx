@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FaSearch, FaTimes } from "react-icons/fa";
 import RecipeCard from "../Components/RecipeCard";
 import {
@@ -6,7 +6,9 @@ import {
   getAll,
   getFavorites,
   removeFavorite,
+  saveSearchHistory,
   searchRecipes,
+  searchYouTubeVideos,
 } from "../Utils/Recipes";
 
 const SEARCH_ALIASES = {
@@ -91,6 +93,10 @@ function Home() {
     error: "",
   });
   const [favoriteIds, setFavoriteIds] = useState(new Set());
+  const [videos, setVideos] = useState([]);
+  const [videosLoading, setVideosLoading] = useState(false);
+  const [videosError, setVideosError] = useState("");
+  const savedLocalSearchRef = useRef("");
 
   useEffect(() => {
     const loadInitialData = async () => {
@@ -179,6 +185,58 @@ function Home() {
   const onlineLoading = usingOnlineSearch && (!activeOnlineResult || activeOnlineResult.loading);
   const onlineError = activeOnlineResult?.error || "";
   const visibleRecipes = usingOnlineSearch ? activeOnlineResult?.recipes || [] : localRecipes;
+  const videoQuery = searchQuery || visibleRecipes[0]?.title || "Nigerian cooking recipes";
+
+  useEffect(() => {
+    if (loading || !videoQuery) return;
+
+    const controller = new AbortController();
+    const loadVideos = async () => {
+      setVideosLoading(true);
+      setVideosError("");
+      try {
+        const results = await searchYouTubeVideos(videoQuery, 3, { signal: controller.signal });
+        setVideos(Array.isArray(results) ? results : []);
+      } catch (err) {
+        if (err.name !== "AbortError") {
+          setVideos([]);
+          setVideosError("Cooking videos are unavailable right now.");
+        }
+      } finally {
+        if (!controller.signal.aborted) setVideosLoading(false);
+      }
+    };
+
+    loadVideos();
+    return () => controller.abort();
+  }, [loading, videoQuery]);
+
+  useEffect(() => {
+    if (!searchQuery || loading || localRecipes.length === 0) {
+      return;
+    }
+
+    const resultIds = localRecipes.map((item) => item.id).join(",");
+    const historyKey = `${searchQuery}:${resultIds}`;
+    if (savedLocalSearchRef.current === historyKey) {
+      return;
+    }
+
+    const timeoutId = setTimeout(async () => {
+      try {
+        await saveSearchHistory({
+          searchText: searchQuery,
+          category: "frontend-local-search",
+          jsonResult: JSON.stringify(localRecipes.slice(0, 12)),
+        });
+        savedLocalSearchRef.current = historyKey;
+      } catch {
+        // Search history should not block the recipe search experience.
+      }
+    }, 600);
+
+    return () => clearTimeout(timeoutId);
+  }, [loading, localRecipes, searchQuery]);
 
   const toggleFavorite = async (recipeId) => {
     const isCurrentlyFavorite = favoriteIds.has(recipeId);
@@ -256,6 +314,41 @@ function Home() {
               </p>
             </div>
           </div>
+
+          <section className="video-section" aria-label="Cooking videos">
+            <div className="video-section-header">
+              <div>
+                <p className="eyebrow video-eyebrow">Watch and learn</p>
+                <h3>Cooking videos for {videoQuery}</h3>
+              </div>
+            </div>
+            {videosLoading ? (
+              <p className="video-status">Loading cooking videos...</p>
+            ) : videosError ? (
+              <p className="video-status">{videosError}</p>
+            ) : videos.length > 0 ? (
+              <div className="video-grid">
+                {videos.map((video) => (
+                  <a
+                    key={video.videoId}
+                    href={video.watchUrl}
+                    className="video-card"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <img src={video.thumbnailUrl} alt={video.title} />
+                    <div>
+                      <h4>{video.title}</h4>
+                      {video.channelTitle && <p>{video.channelTitle}</p>}
+                      <span>Watch on YouTube</span>
+                    </div>
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <p className="video-status">No related cooking videos found.</p>
+            )}
+          </section>
 
           {error ? (
             <div className="empty-state">{error}</div>

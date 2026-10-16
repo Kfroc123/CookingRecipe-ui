@@ -1,4 +1,4 @@
-import { BiBookContent, BiFoodMenu, BiHeart, BiHome } from "react-icons/bi";
+import { BiBookContent, BiFoodMenu, BiHeart, BiHistory, BiHome } from "react-icons/bi";
 import { NavLink } from "react-router-dom";
 
 function SideBar() {
@@ -22,6 +22,10 @@ function SideBar() {
         <NavLink to="/favorites" className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}>
           <BiHeart />
           <span>Favorites</span>
+        </NavLink>
+        <NavLink to="/history" className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}>
+          <BiHistory />
+          <span>History</span>
         </NavLink>
         <NavLink to="/search-tips" className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}>
           <BiBookContent />
